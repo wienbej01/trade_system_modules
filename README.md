@@ -34,7 +34,7 @@ pip install trade-system-modules==0.1.0 --index-url https://pypi.org/simple/  # 
 
 ### From Git URL (Pinned)
 ```
-pip install "trade-system-modules @ git+ssh://git@github.com/org/trade_system_modules.git@v0.1.0"
+pip install "trade-system-modules @ git+https://github.com/wienbej01/trade_system_modules.git@v0.1.0"
 ```
 
 ## Versioning
@@ -63,4 +63,3 @@ Copy `.env.example` to `.env` and fill in:
 Use the provided template:
 ```
 cookiecutter cookiecutter-strategy/
-```
