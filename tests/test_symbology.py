@@ -1,5 +1,6 @@
 """Unit tests for data.symbology."""
 
+import pytest
 from trade_system_modules.data.symbology import resolve_instrument
 from ib_insync import Stock
 

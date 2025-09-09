@@ -1,6 +1,7 @@
 """Unit tests for polygon_adapter with offline mocks."""
 
 import pytest
+import requests
 from unittest.mock import Mock
 from pandas import DataFrame, Timestamp
 from trade_system_modules.data.polygon_adapter import get_agg_minute

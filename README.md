@@ -23,6 +23,21 @@ Shared Python package for trade systems: config, schemas, data adapters (Polygon
    # etc.
    ```
 
+## 📚 Documentation
+
+Complete documentation is available in the [docs/](docs/) directory:
+
+- **[Installation Guide](docs/installation.md)** - Setup and deployment
+- **[Configuration Guide](docs/configuration.md)** - Environment and settings
+- **[API Reference](docs/api-reference.md)** - Complete API documentation
+- **[Data Adapters](docs/data-adapters.md)** - Market data interfaces
+- **[Storage Guide](docs/storage.md)** - Cloud storage operations
+- **[Execution Guide](docs/execution.md)** - Trading execution
+- **[Usage Examples](docs/examples/)** - Code examples
+- **[Cookiecutter Template](docs/cookiecutter.md)** - Strategy scaffolding
+- **[Development Guide](docs/development.md)** - Contributing guidelines
+- **[Troubleshooting](docs/troubleshooting.md)** - Common issues and solutions
+
 See usage examples in docs or tests.
 
 ## Installation
