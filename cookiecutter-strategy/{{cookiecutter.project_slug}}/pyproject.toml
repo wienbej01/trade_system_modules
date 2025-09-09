@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{{cookiecutter.module_slug}}"
+version = "0.1.0"
+description = "{{cookiecutter.project_name}} - Strategy using trade_system_modules"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {file = "../LICENSE"}
+authors = [{name = "Strategy Developer", email = "dev@hedgefund.com"}]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "trade-system-modules=={{cookiecutter.tsm_version}}",
+    "pandas>=2.0",
+    "pytest>=7.4",
+]
+
+[project.urls]
+Repository = "https://github.com/org/{{cookiecutter.project_slug}}"
+
+[tool.setuptools.packages.find]
+where = ["src"]
