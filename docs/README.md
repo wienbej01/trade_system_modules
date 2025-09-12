@@ -37,7 +37,7 @@ from trade_system_modules import Settings, get_agg_minute, GCSClient, IBLive
 settings = Settings()
 
 # Get market data
-data = get_agg_minute("AAPL", "2023-01-01", "2023-01-02")
+data = asyncio.run(get_agg_minute("AAPL", "2023-01-01", "2023-01-02"))
 
 # Store data in cloud
 client = GCSClient()
@@ -62,6 +62,7 @@ client.to_parquet(data, "data/aapl_minute.parquet")
 
 - **🔧 Modular Design**: Clean separation of concerns with pluggable components
 - **📊 Multi-Source Data**: Support for Polygon.io and Interactive Brokers data
+- **⚡ Async Data**: High-throughput async downloads from Polygon.io with parallel concurrency
 - **☁️ Cloud Storage**: Google Cloud Storage integration with parquet support
 - **⚡ High Performance**: Optimized for real-time trading applications
 - **🛡️ Type Safety**: Full type hints and Pydantic validation

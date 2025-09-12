@@ -121,6 +121,7 @@ dependencies = [
     "tenacity>=8.2",
     "python-dotenv>=1.0",
     "requests",
+    "aiohttp>=3.8.0",
 ]
 ```
 
@@ -131,9 +132,11 @@ Development dependencies:
 ```python
 dev = [
     "pytest>=7.4",
+    "pytest-asyncio>=0.21",
     "ruff>=0.1",
     "mypy>=1.5",
     "types-requests>=2.31",
+    "types-aiohttp",
 ]
 ```
 

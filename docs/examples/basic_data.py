@@ -16,6 +16,7 @@ from trade_system_modules import (
 )
 from trade_system_modules.schemas.bars import ensure_bar_schema
 import pandas as pd
+import asyncio
 
 def main():
     """Main example function."""
@@ -36,7 +37,7 @@ def main():
     end_date = "2023-01-02"
 
     try:
-        data = get_agg_minute(symbol, start_date, end_date)
+        data = asyncio.run(get_agg_minute(symbol, start_date, end_date))
         print(f"   Retrieved {len(data)} bars for {symbol}")
         print(f"   Date range: {start_date} to {end_date}")
         print(f"   Columns: {list(data.columns)}")

@@ -48,9 +48,10 @@ custom_settings = Settings(gcs_bucket="my-bucket")
 ### get_agg_minute
 
 ```python
-from trade_system_modules.data.polygon_adapter import get_agg_minute
+from trade_system_modules.data.polygon_adapter import get_agg_minute, get_agg_minute_batch
+import asyncio
 
-def get_agg_minute(symbol: str, start: str, end: str) -> pd.DataFrame
+async def get_agg_minute(symbol: str, start: str, end: str, concurrency: int = 20) -> pd.DataFrame
 ```
 
 Get minute-level aggregate bars from Polygon.io.
@@ -60,11 +61,12 @@ Get minute-level aggregate bars from Polygon.io.
 - `symbol: str` - Stock symbol (e.g., "AAPL")
 - `start: str` - Start date in YYYY-MM-DD format
 - `end: str` - End date in YYYY-MM-DD format
+- `concurrency: int = 20` - Number of concurrent requests
 
 #### Returns
 
 `pd.DataFrame` with columns:
-- `ts` - Timestamp (UTC timezone-aware)
+- `ts` - Timestamp (America/New_York timezone-aware)
 - `open` - Opening price
 - `high` - High price
 - `low` - Low price
@@ -78,7 +80,7 @@ Get minute-level aggregate bars from Polygon.io.
 from trade_system_modules.data.polygon_adapter import get_agg_minute
 
 # Get AAPL data for January 2023
-data = get_agg_minute("AAPL", "2023-01-01", "2023-01-31")
+data = asyncio.run(get_agg_minute("AAPL", "2023-01-01", "2023-01-31", concurrency=20))
 print(data.head())
 ```
 
@@ -108,6 +110,33 @@ from trade_system_modules.data.symbology import resolve_instrument
 contract = resolve_instrument("AAPL")
 print(f"Symbol: {contract.symbol}")
 print(f"Exchange: {contract.exchange}")
+
+### get_agg_minute_batch
+
+```python
+from trade_system_modules.data.polygon_adapter import get_agg_minute_batch
+import asyncio
+
+async def get_agg_minute_batch(symbols: List[str], start: str, end: str, concurrency: int = 20) -> Dict[str, pd.DataFrame]
+```
+
+Get minute aggregates for multiple symbols in parallel using async downloads.
+
+#### Parameters
+- `symbols: List[str]` - List of stock symbols
+- `start: str` - Start date in YYYY-MM-DD format
+- `end: str` - End date in YYYY-MM-DD format
+- `concurrency: int = 20` - Number of concurrent requests per symbol batch
+
+#### Returns
+`Dict[str, pd.DataFrame]` - Dictionary mapping symbol to its DataFrame
+
+#### Example
+```python
+symbols = ["AAPL", "MSFT", "GOOGL"]
+data_dict = asyncio.run(get_agg_minute_batch(symbols, "2023-01-01", "2023-01-02"))
+aapl_data = data_dict["AAPL"]
+```
 ```
 
 ## Storage

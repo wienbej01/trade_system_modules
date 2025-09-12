@@ -12,15 +12,16 @@ The package provides standardized interfaces for market data:
 
 ## Polygon.io Adapter
 
-### get_agg_minute()
+### get_agg_minute() - Async Enhanced
 
-Retrieve minute-level aggregate bars from Polygon.io.
+Retrieve minute-level aggregate bars from Polygon.io using asynchronous parallel downloads with day-wise chunking for efficient 5+ year range handling.
 
 ```python
 from trade_system_modules.data.polygon_adapter import get_agg_minute
+import asyncio
 
-# Get AAPL minute data for a specific date range
-data = get_agg_minute("AAPL", "2023-01-01", "2023-01-02")
+# Get AAPL minute data for a specific date range (async)
+data = asyncio.run(get_agg_minute("AAPL", "2023-01-01", "2023-01-02", concurrency=20))
 print(data.head())
 ```
 
@@ -33,19 +34,20 @@ print(data.head())
 - **Error handling** for API failures
 
 #### Parameters
-
 | Parameter | Type | Description | Example |
 |-----------|------|-------------|---------|
 | `symbol` | `str` | Stock symbol | `"AAPL"` |
 | `start` | `str` | Start date (YYYY-MM-DD) | `"2023-01-01"` |
 | `end` | `str` | End date (YYYY-MM-DD) | `"2023-01-02"` |
+| `concurrency` | `int` | Concurrent requests (default: 20) | `20` |
+
 
 #### Response Schema
 
 ```python
 # DataFrame columns
 {
-    "ts": "datetime64[ns, UTC]",  # Timestamp
+    "ts": "datetime64[ns, America/New_York]",  # Timestamp (NY timezone)
     "open": "float64",             # Opening price
     "high": "float64",             # High price
     "low": "float64",              # Low price
@@ -73,12 +75,13 @@ except Exception as e:
 
 Polygon.io has these rate limits:
 - **Free tier**: 5 API calls/minute
-- **Paid plans**: Higher limits based on subscription
+- **Paid plans**: Higher limits based on subscription (unlimited for top tiers)
 
-The adapter handles rate limiting through:
-- Automatic retries with backoff
-- Request spacing
-- Error handling for 429 responses
+The async adapter maximizes throughput through:
+- Parallel async requests with configurable concurrency
+- Day-wise chunking for long date ranges (5+ years)
+- Automatic retries with backoff per request
+- Efficient session management with connection pooling
 
 ## Interactive Brokers Live Data
 
@@ -295,25 +298,16 @@ def validate_market_data(df):
 ### Batch Processing
 
 ```python
+from trade_system_modules.data.polygon_adapter import get_agg_minute_batch
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 
-async def get_multiple_symbols(symbols, start_date, end_date):
-    """Get data for multiple symbols concurrently."""
-
-    async def get_symbol_data(symbol):
-        return await asyncio.get_event_loop().run_in_executor(
-            None, get_agg_minute, symbol, start_date, end_date
-        )
-
-    tasks = [get_symbol_data(symbol) for symbol in symbols]
-    results = await asyncio.gather(*tasks)
-
-    return dict(zip(symbols, results))
-
-# Usage
+# Get data for multiple symbols in parallel (native async)
 symbols = ["AAPL", "MSFT", "GOOGL", "AMZN"]
-data_dict = asyncio.run(get_multiple_symbols(symbols, "2023-01-01", "2023-01-02"))
+data_dict = asyncio.run(get_agg_minute_batch(symbols, "2023-01-01", "2023-01-02", concurrency=20))
+
+# Access individual DataFrames
+aapl_data = data_dict["AAPL"]
+print(aapl_data.head())
 ```
 
 ### Caching Strategy
