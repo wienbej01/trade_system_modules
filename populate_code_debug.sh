@@ -328,7 +328,49 @@ def expected_minutes_for_day(day: pd.Timestamp, include_extended: bool = True):
         minutes.extend(rng)
     return minutes
 
+async def fetch_active_stocks(client: PolygonClient, market: str = 'stocks', limit_per_page: int = 1000) -> list[str]:
+    """Fetch all active stock tickers from Polygon.io API with pagination."""
+    all_tickers = []
+    next_url = None
+    page = 0
+    logger.info(f"Fetching active {market} tickers from Polygon.io...")
+    
+    while True:
+        page += 1
+        params = {'market': market, 'active': 'true', 'limit': limit_per_page}
+        if next_url:
+            data = await client._get(next_url, {})
+        else:
+            data = await client.list_tickers(**params)
+        
+        results = data.get('results', [])
+        for ticker in results:
+            symbol = ticker.get('ticker')
+            if symbol:
+                all_tickers.append(symbol)
+        
+        logger.info(f"Page {page}: fetched {len(results)} tickers (total: {len(all_tickers)})")
+        
+        next_url = data.get('next_url')
+        if not next_url:
+            break
+    
+    logger.info(f"Fetched {len(all_tickers)} active {market} tickers from Polygon.io")
+    return all_tickers
+
+def fetch_sp500_fallback() -> list[str]:
+    """Fallback hardcoded S&P500 list for testing."""
+    fallback = [
+        'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'UNH', 'JNJ',
+        'JPM', 'V', 'PG', 'HD', 'MA', 'CVX', 'ABBV', 'PFE', 'BAC', 'KO',
+        'CRM', 'ADBE', 'NFLX', 'COST', 'TMO', 'AVGO', 'LIN', 'WMT', 'MRK', 'ACN',
+        'TMUS', 'DHR', 'ABT', 'VZ', 'NEE', 'TXN', 'UNH', 'CSCO', 'WFC', 'XOM', 'ORCL'
+    ]
+    logger.info(f"Using fallback S&P500 list: {len(fallback)} symbols")
+    return fallback
+
 def fetch_sp500_from_wikipedia() -> list[str]:
+    """Legacy Wikipedia fetch - use only if Polygon API unavailable."""
     url = 'https://en.wikipedia.org/wiki/List_of_S%26P_500_companies'
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
@@ -343,11 +385,8 @@ def fetch_sp500_from_wikipedia() -> list[str]:
         logger.info(f"Fetched {len(syms)} S&P500 symbols from Wikipedia")
         return syms
     except Exception as ex:
-        logger.error(f"Wikipedia fetch failed: {ex}. Using fallback S&P500 list.")
-        # Fallback to hardcoded recent S&P500 subset for testing
-        fallback = ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'UNH', 'JNJ']
-        logger.info(f"Using fallback: {len(fallback)} symbols")
-        return fallback
+        logger.error(f"Wikipedia fetch failed: {ex}. Returning fallback.")
+        return fetch_sp500_fallback()
 
 def yahoo_daily_ohlc(ticker: str, dt: pd.Timestamp):
     logger.info(f"yfinance call for {ticker} around {dt.date()}")
@@ -529,9 +568,10 @@ async def backfill_nbbo_top25(gcs, settings, sp500: list[str]):
         limiter = PaceLimiter(settings.stocks_rpm)
         end = pd.Timestamp.utcnow()
         start = end - pd.Timedelta(days=settings.nbbo_days_back)
-        start_ns = int(start.value // 1000)  # Fix: ns to proper timestamp (was missing //1000?)
-        end_ns = int(end.value // 1000)
+        start_ns = int(start.value)  # Proper nanoseconds since epoch
+        end_ns = int(end.value)
         logger.info(f"NBBO timestamp range: start={start}, end={end}, start_ns={start_ns}, end_ns={end_ns}")
+        logger.info(f"Timestamps decode: start={pd.Timestamp(start_ns, unit='ns')}, end={pd.Timestamp(end_ns, unit='ns')}")
         for t in top:
             await limiter.wait()
             try:

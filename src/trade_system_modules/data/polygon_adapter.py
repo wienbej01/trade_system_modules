@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import aiohttp
+import json
+import os
+import logging
 from datetime import datetime, timedelta
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_not_exception_type
 import pandas as pd
@@ -133,3 +136,142 @@ async def get_agg_minute_batch(
                 results[sym] = combined.sort_values("ts").reset_index(drop=True)
     
     return results
+
+
+async def get_sp500_symbols(api_key: str, cache_file: str = 'sp500_symbols.json') -> List[str]:
+    """Fetch S&P 500 symbols using Polygon indices constituents endpoint with caching.
+    
+    Primary source:
+      - /v3/reference/indices/I:SPX/constituents (paginated with next_url)
+    
+    Fallback (Polygon-only if constituents are unavailable on plan):
+      - /v3/reference/tickers with filters for US common stocks, sorted by market cap.
+        This is NOT an exact SP500 list but provides a large-cap proxy if needed.
+    """
+    # Serve cache if available, but validate count (expect ~500). If wrong, refetch.
+    if os.path.exists(cache_file):
+        with open(cache_file, 'r') as f:
+            cached = json.load(f)
+        if isinstance(cached, list) and 400 <= len(cached) <= 700:
+            logging.info("Loaded %d S&P 500 symbols from cache: %s", len(cached), cache_file)
+            return cached
+        # fall through to refetch if cache looks wrong
+
+    symbols: List[str] = []
+
+    # Try Polygon Indices Constituents for I:SPX
+    connector = aiohttp.TCPConnector(limit=10)
+    timeout = aiohttp.ClientTimeout(total=60)
+    headers = {"Accept": "application/json"}
+
+    url = "https://api.polygon.io/v3/reference/indices/I:SPX/constituents"
+    params = {"apiKey": api_key, "limit": 1000}
+    try:
+        async with aiohttp.ClientSession(connector=connector, timeout=timeout, headers=headers) as session:
+            agg: set[str] = set()
+            current_url = url
+            current_params = dict(params)
+            while True:
+                async with session.get(current_url, params=current_params) as resp:
+                    # If plan does not include indices constituents, this may 403/404
+                    if resp.status == 403 or resp.status == 404:
+                        logging.warning("Polygon indices constituents endpoint unavailable (status %s); falling back", resp.status)
+                        break
+                    resp.raise_for_status()
+                    data = await resp.json()
+
+                for item in data.get("results", []):
+                    t = item.get("ticker") or (item.get("component") or {}).get("ticker")
+                    if t:
+                        agg.add(t)
+
+                next_url = data.get("next_url")
+                if next_url:
+                    current_url = next_url
+                    current_params = {"apiKey": api_key}
+                    continue
+                break
+
+            if agg:
+                symbols = sorted(agg)
+                logging.info("Fetched %d S&P 500 constituents from Polygon indices", len(symbols))
+    except Exception:
+        # Silent continue to fallback
+        symbols = symbols
+
+    # Fallback to large-cap proxy if exact constituents weren't available
+    if not symbols:
+        try:
+            async with aiohttp.ClientSession(connector=connector, timeout=timeout, headers=headers) as session:
+                url = "https://api.polygon.io/v3/reference/tickers"
+                # Filter to active US common stocks, sort by market cap desc.
+                params = {
+                    "apiKey": api_key,
+                    "market": "stocks",
+                    "active": "true",
+                    "type": "CS",
+                    "locale": "us",
+                    "sort": "market_cap",
+                    "order": "desc",
+                    "limit": 1000,
+                }
+                proxy_syms: List[str] = []
+                current_url = url
+                current_params = dict(params)
+                while True:
+                    async with session.get(current_url, params=current_params) as resp:
+                        resp.raise_for_status()
+                        data = await resp.json()
+                    for r in data.get("results", []):
+                        sym = r.get("ticker")
+                        if sym:
+                            proxy_syms.append(sym)
+                    next_url = data.get("next_url")
+                    if not next_url or len(proxy_syms) >= 600:
+                        break
+                    current_url = next_url
+                    current_params = {"apiKey": api_key}
+                if proxy_syms:
+                    symbols = sorted(proxy_syms[:500])
+                    logging.info("Using large-cap proxy list from Polygon tickers endpoint; count=%d", len(symbols))
+        except Exception:
+            symbols = symbols
+
+    # Cache and return
+    with open(cache_file, 'w') as f:
+        json.dump(symbols, f)
+    logging.info("Cached %d symbols to %s", len(symbols), cache_file)
+    return symbols
+
+
+async def get_agg_minute_range(symbol: str, start_dt: datetime, end_dt: datetime, concurrency: int = 20) -> DataFrame:
+    """Get minute aggregates for a date range using async parallel downloads."""
+    api_key = settings.polygon_api_key
+    if not api_key:
+        raise ValueError("Polygon API key required in settings.")
+
+    days = daterange_days(start_dt, end_dt)
+    if not days:
+        return DataFrame()
+
+    connector = aiohttp.TCPConnector(limit=concurrency * 4)
+    timeout = aiohttp.ClientTimeout(total=60)
+    async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+        all_dfs = []
+        for i in range(0, len(days), concurrency):
+            chunk = days[i:i + concurrency]
+            tasks = [fetch_day_aggregates(session, api_key, symbol, d) for d in chunk]
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for res in results:
+                if isinstance(res, Exception) or res is None:
+                    continue
+                all_dfs.append(res)
+
+        if not all_dfs:
+            return DataFrame()
+
+        combined = pd.concat(all_dfs, axis=0)
+        combined.reset_index(inplace=True)
+        combined.rename(columns={"index": "ts"}, inplace=True)
+        combined = combined[["ts", "open", "high", "low", "close", "volume", "trades"]]
+        return combined.sort_values("ts").reset_index(drop=True)
